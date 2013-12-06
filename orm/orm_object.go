@@ -23,10 +23,10 @@ func (o *insertSet) Insert(md interface{}) (int64, error) {
 	typ := ind.Type()
 	name := getFullName(typ)
 	if val.Kind() != reflect.Ptr {
-		panic(fmt.Sprintf("<Inserter.Insert> cannot use non-ptr model struct `%s`", name))
+		panic(fmt.Errorf("<Inserter.Insert> cannot use non-ptr model struct `%s`", name))
 	}
 	if name != o.mi.fullName {
-		panic(fmt.Sprintf("<Inserter.Insert> need model `%s` but found `%s`", o.mi.fullName, name))
+		panic(fmt.Errorf("<Inserter.Insert> need model `%s` but found `%s`", o.mi.fullName, name))
 	}
 	id, err := o.orm.alias.DbBaser.InsertStmt(o.stmt, o.mi, ind, o.orm.alias.TZ)
 	if err != nil {
@@ -34,7 +34,11 @@ func (o *insertSet) Insert(md interface{}) (int64, error) {
 	}
 	if id > 0 {
 		if o.mi.fields.pk.auto {
-			ind.Field(o.mi.fields.pk.fieldIndex).SetInt(id)
+			if o.mi.fields.pk.fieldType&IsPostiveIntegerField > 0 {
+				ind.Field(o.mi.fields.pk.fieldIndex).SetUint(uint64(id))
+			} else {
+				ind.Field(o.mi.fields.pk.fieldIndex).SetInt(id)
+			}
 		}
 	}
 	return id, nil

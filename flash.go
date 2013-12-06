@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+const BEEGO_FLASH_SEP = "#BEEGOFLASH#"
+
 type FlashData struct {
 	Data map[string]string
 }
@@ -44,7 +46,7 @@ func (fd *FlashData) Store(c *Controller) {
 	c.Data["flash"] = fd.Data
 	var flashValue string
 	for key, value := range fd.Data {
-		flashValue += "\x00" + key + ":" + value + "\x00"
+		flashValue += "\x00" + key + BEEGO_FLASH_SEP + value + "\x00"
 	}
 	c.Ctx.SetCookie("BEEGO_FLASH", url.QueryEscape(flashValue), 0, "/")
 }
@@ -54,18 +56,18 @@ func ReadFromRequest(c *Controller) *FlashData {
 		Data: make(map[string]string),
 	}
 	if cookie, err := c.Ctx.Request.Cookie("BEEGO_FLASH"); err == nil {
-		vals := strings.Split(cookie.Value, "\x00")
+		v, _ := url.QueryUnescape(cookie.Value)
+		vals := strings.Split(v, "\x00")
 		for _, v := range vals {
 			if len(v) > 0 {
-				kv := strings.Split(v, ":")
+				kv := strings.Split(v, BEEGO_FLASH_SEP)
 				if len(kv) == 2 {
 					flash.Data[kv[0]] = kv[1]
 				}
 			}
 		}
 		//read one time then delete it
-		cookie.MaxAge = -1
-		c.Ctx.Request.AddCookie(cookie)
+		c.Ctx.SetCookie("BEEGO_FLASH", "", -1, "/")
 	}
 	c.Data["flash"] = flash.Data
 	return flash

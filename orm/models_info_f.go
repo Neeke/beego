@@ -89,11 +89,10 @@ type fieldInfo struct {
 	fullName            string
 	column              string
 	addrValue           reflect.Value
-	sf                  *reflect.StructField
+	sf                  reflect.StructField
 	auto                bool
 	pk                  bool
 	null                bool
-	blank               bool
 	index               bool
 	unique              bool
 	initial             StrTo
@@ -104,6 +103,8 @@ type fieldInfo struct {
 	reverse             bool
 	reverseField        string
 	reverseFieldInfo    *fieldInfo
+	reverseFieldInfoTwo *fieldInfo
+	reverseFieldInfoM2M *fieldInfo
 	relTable            string
 	relThrough          string
 	relThroughModelInfo *modelInfo
@@ -127,10 +128,14 @@ func newFieldInfo(mi *modelInfo, field reflect.Value, sf reflect.StructField) (f
 
 	fi = new(fieldInfo)
 
-	if field.Kind() != reflect.Ptr && field.Kind() != reflect.Slice && field.CanAddr() {
+	addrField = field
+	if field.CanAddr() && field.Kind() != reflect.Ptr {
 		addrField = field.Addr()
-	} else {
-		addrField = field
+		if _, ok := addrField.Interface().(Fielder); !ok {
+			if field.Kind() == reflect.Slice {
+				addrField = field
+			}
+		}
 	}
 
 	parseStructTag(sf.Tag.Get(defaultStructTagName), &attrs, &tags)
@@ -206,8 +211,8 @@ checkType:
 		if err != nil {
 			goto end
 		}
-		if fieldType == TypeTextField && size != "" {
-			fieldType = TypeCharField
+		if fieldType == TypeCharField && tags["type"] == "text" {
+			fieldType = TypeTextField
 		}
 		if fieldType == TypeFloatField && (digits != "" || decimals != "") {
 			fieldType = TypeDecimalField
@@ -244,11 +249,10 @@ checkType:
 	fi.name = sf.Name
 	fi.column = getColumnName(fieldType, addrField, sf, tags["column"])
 	fi.addrValue = addrField
-	fi.sf = &sf
+	fi.sf = sf
 	fi.fullName = mi.fullName + "." + sf.Name
 
 	fi.null = attrs["null"]
-	fi.blank = attrs["blank"]
 	fi.index = attrs["index"]
 	fi.auto = attrs["auto"]
 	fi.pk = attrs["pk"]
@@ -257,7 +261,6 @@ checkType:
 	switch fieldType {
 	case RelManyToMany, RelReverseMany, RelReverseOne:
 		fi.null = false
-		fi.blank = false
 		fi.index = false
 		fi.auto = false
 		fi.pk = false
@@ -312,7 +315,7 @@ checkType:
 				fi.size = int(v)
 			}
 		} else {
-			err = fmt.Errorf("size must be specify")
+			fi.size = 255
 		}
 	case TypeTextField:
 		fi.index = false
@@ -347,27 +350,26 @@ checkType:
 			err = fmt.Errorf("non-integer type cannot set auto")
 			goto end
 		}
-
-		if fi.pk || fi.index || fi.unique {
-			if fieldType != TypeCharField && fieldType != RelOneToOne {
-				err = fmt.Errorf("cannot set pk/index/unique")
-				goto end
-			}
-		}
 	}
 
 	if fi.auto || fi.pk {
 		if fi.auto {
+
+			switch addrField.Elem().Kind() {
+			case reflect.Int, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint32, reflect.Uint64:
+			default:
+				err = fmt.Errorf("auto primary key only support int, int32, int64, uint, uint32, uint64 but found `%s`", addrField.Elem().Kind())
+				goto end
+			}
+
 			fi.pk = true
 		}
 		fi.null = false
-		fi.blank = false
 		fi.index = false
 		fi.unique = false
 	}
 
 	if fi.unique {
-		fi.blank = false
 		fi.index = false
 	}
 
@@ -391,7 +393,7 @@ checkType:
 			_, err = v.Int32()
 		case TypeBigIntegerField:
 			_, err = v.Int64()
-		case TypePostiveBitField:
+		case TypePositiveBitField:
 			_, err = v.Uint8()
 		case TypePositiveSmallIntegerField:
 			_, err = v.Uint16()

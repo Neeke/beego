@@ -16,6 +16,8 @@ type modelInfo struct {
 	fields    *fields
 	manual    bool
 	addrField reflect.Value
+	uniques   []string
+	isThrough bool
 }
 
 func newModelInfo(val reflect.Value) (info *modelInfo) {
@@ -31,7 +33,7 @@ func newModelInfo(val reflect.Value) (info *modelInfo) {
 	ind := reflect.Indirect(val)
 	typ := ind.Type()
 
-	info.addrField = ind.Addr()
+	info.addrField = val
 
 	info.name = typ.Name()
 	info.fullName = getFullName(typ)
@@ -66,6 +68,7 @@ func newModelInfo(val reflect.Value) (info *modelInfo) {
 
 		fi.fieldIndex = i
 		fi.mi = info
+		fi.inModel = true
 	}
 
 	if err != nil {
@@ -90,6 +93,9 @@ func newM2MModelInfo(m1, m2 *modelInfo) (info *modelInfo) {
 	fa.auto = true
 	fa.pk = true
 	fa.dbcol = true
+	fa.name = "Id"
+	fa.column = "id"
+	fa.fullName = info.fullName + "." + fa.name
 
 	f1.dbcol = true
 	f2.dbcol = true
@@ -114,5 +120,7 @@ func newM2MModelInfo(m1, m2 *modelInfo) (info *modelInfo) {
 	info.fields.Add(f1)
 	info.fields.Add(f2)
 	info.fields.pk = fa
+
+	info.uniques = []string{f1.column, f2.column}
 	return
 }

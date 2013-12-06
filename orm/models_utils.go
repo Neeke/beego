@@ -26,14 +26,63 @@ func getTableName(val reflect.Value) string {
 	return snakeString(ind.Type().Name())
 }
 
+func getTableEngine(val reflect.Value) string {
+	fun := val.MethodByName("TableEngine")
+	if fun.IsValid() {
+		vals := fun.Call([]reflect.Value{})
+		if len(vals) > 0 {
+			val := vals[0]
+			if val.Kind() == reflect.String {
+				return val.String()
+			}
+		}
+	}
+	return ""
+}
+
+func getTableIndex(val reflect.Value) [][]string {
+	fun := val.MethodByName("TableIndex")
+	if fun.IsValid() {
+		vals := fun.Call([]reflect.Value{})
+		if len(vals) > 0 {
+			val := vals[0]
+			if val.CanInterface() {
+				if d, ok := val.Interface().([][]string); ok {
+					return d
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func getTableUnique(val reflect.Value) [][]string {
+	fun := val.MethodByName("TableUnique")
+	if fun.IsValid() {
+		vals := fun.Call([]reflect.Value{})
+		if len(vals) > 0 {
+			val := vals[0]
+			if val.CanInterface() {
+				if d, ok := val.Interface().([][]string); ok {
+					return d
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func getColumnName(ft int, addrField reflect.Value, sf reflect.StructField, col string) string {
-	column := strings.ToLower(col)
-	if column == "" {
+	col = strings.ToLower(col)
+	column := col
+	if col == "" {
 		column = snakeString(sf.Name)
 	}
 	switch ft {
 	case RelForeignKey, RelOneToOne:
-		column = column + "_id"
+		if len(col) == 0 {
+			column = column + "_id"
+		}
 	case RelManyToMany, RelReverseMany, RelReverseOne:
 		column = sf.Name
 	}
@@ -52,7 +101,7 @@ func getFieldType(val reflect.Value) (ft int, err error) {
 	case reflect.Int64:
 		ft = TypeBigIntegerField
 	case reflect.Uint8:
-		ft = TypePostiveBitField
+		ft = TypePositiveBitField
 	case reflect.Uint16:
 		ft = TypePositiveSmallIntegerField
 	case reflect.Uint32, reflect.Uint:
@@ -64,7 +113,7 @@ func getFieldType(val reflect.Value) (ft int, err error) {
 	case reflect.Bool:
 		ft = TypeBooleanField
 	case reflect.String:
-		ft = TypeTextField
+		ft = TypeCharField
 	case reflect.Invalid:
 	default:
 		if elm.CanInterface() {
@@ -82,7 +131,7 @@ func getFieldType(val reflect.Value) (ft int, err error) {
 func parseStructTag(data string, attrs *map[string]bool, tags *map[string]string) {
 	attr := make(map[string]bool)
 	tag := make(map[string]string)
-	for _, v := range strings.Split(data, ";") {
+	for _, v := range strings.Split(data, defaultStructTagDelim) {
 		v = strings.TrimSpace(v)
 		if supportTag[v] == 1 {
 			attr[v] = true
